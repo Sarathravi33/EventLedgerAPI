@@ -1,4 +1,5 @@
 E:\Java project\src\main\java\com\eventledger\config\JacksonConfig.java
+E:\Java project\src\main\java\com\eventledger\config\OpenApiConfig.java
 E:\Java project\src\main\java\com\eventledger\controller\AccountController.java
 E:\Java project\src\main\java\com\eventledger\controller\EventController.java
 E:\Java project\src\main\java\com\eventledger\dto\BalanceResponse.java

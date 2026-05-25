@@ -1,5 +1,7 @@
 package com.eventledger.enums;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Enumeration of supported financial transaction event types.
  *
@@ -9,6 +11,7 @@ package com.eventledger.enums;
  *
  * @author Sarathkumar Ravi
  */
+@Schema(description = "Transaction type: CREDIT increases the account balance, DEBIT decreases it")
 public enum EventType {
 
     /** Represents an incoming fund movement that increases the account balance. */

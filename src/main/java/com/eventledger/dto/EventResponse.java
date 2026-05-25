@@ -1,6 +1,7 @@
 package com.eventledger.dto;
 
 import com.eventledger.enums.EventType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -12,33 +13,34 @@ import java.util.Map;
  *
  * @author Sarathkumar Ravi
  */
+@Schema(description = "Response payload representing a persisted transaction event")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class EventResponse {
 
-    /** Unique identifier of the event (idempotency key). */
+    @Schema(description = "Unique identifier of the event (idempotency key)", example = "evt-001")
     private String eventId;
 
-    /** Identifier of the account this event belongs to. */
+    @Schema(description = "Account this event belongs to", example = "acct-123")
     private String accountId;
 
-    /** Type of the transaction: {@code CREDIT} or {@code DEBIT}. */
+    @Schema(description = "Transaction type: CREDIT or DEBIT", example = "CREDIT")
     private EventType type;
 
-    /** Monetary amount of the transaction. */
+    @Schema(description = "Monetary amount of the transaction", example = "150.00")
     private BigDecimal amount;
 
-    /** ISO 4217 currency code (e.g. {@code USD}). */
+    @Schema(description = "ISO 4217 currency code", example = "USD")
     private String currency;
 
-    /** Timestamp at which the event occurred, as supplied by the client. */
+    @Schema(description = "UTC timestamp at which the event occurred (ISO-8601)", example = "2026-05-15T14:02:11Z")
     private Instant eventTimestamp;
 
-    /** Optional key/value metadata associated with this event. */
+    @Schema(description = "Optional free-form key/value metadata")
     private Map<String, Object> metadata;
 
-    /** Timestamp at which the event was persisted to the store. */
+    @Schema(description = "UTC timestamp at which the event was persisted", example = "2026-05-15T14:02:12Z")
     private Instant createdAt;
 }

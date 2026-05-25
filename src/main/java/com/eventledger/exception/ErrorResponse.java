@@ -1,5 +1,6 @@
 package com.eventledger.exception;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 import java.time.Instant;
@@ -13,24 +14,25 @@ import java.time.Instant;
  *
  * @author Sarathkumar Ravi
  */
+@Schema(description = "Standardised error response returned for all error conditions")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class ErrorResponse {
 
-    /** UTC timestamp at which the error was generated. */
+    @Schema(description = "UTC timestamp at which the error was generated", example = "2026-05-15T14:02:11Z")
     private Instant timestamp;
 
-    /** HTTP status code (e.g. {@code 400}, {@code 404}, {@code 500}). */
+    @Schema(description = "HTTP status code", example = "404")
     private int status;
 
-    /** Short HTTP reason phrase corresponding to the status code (e.g. {@code "Bad Request"}). */
+    @Schema(description = "Short HTTP reason phrase", example = "Not Found")
     private String error;
 
-    /** Human-readable description of what went wrong. */
+    @Schema(description = "Human-readable description of what went wrong", example = "Event not found: evt-999")
     private String message;
 
-    /** The request URI that produced this error. */
+    @Schema(description = "Request URI that produced this error", example = "/events/evt-999")
     private String path;
 }
