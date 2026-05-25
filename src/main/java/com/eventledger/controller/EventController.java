@@ -17,7 +17,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EventController {
 
-    private final EventService eventService;
+    private final EventService eventService = null;
 
     @PostMapping
     public ResponseEntity<EventResponse> submitEvent(@RequestBody @Valid EventRequest request) {
