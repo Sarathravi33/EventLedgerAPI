@@ -25,8 +25,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class EventServiceImpl implements EventService {
 
-    private final TransactionEventRepository repository = null;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final TransactionEventRepository repository;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
