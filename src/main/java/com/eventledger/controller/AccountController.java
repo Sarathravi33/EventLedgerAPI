@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AccountController {
 
-    private final EventService eventService = null;
+    private final EventService eventService;
 
     @GetMapping("/{accountId}/balance")
     public ResponseEntity<BalanceResponse> getBalance(@PathVariable String accountId) {
