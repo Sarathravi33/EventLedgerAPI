@@ -21,6 +21,23 @@ import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * Integration tests for {@link EventController} covering all three endpoints:
+ * <ul>
+ *   <li>{@code POST /events} — submit a new or duplicate event</li>
+ *   <li>{@code GET /events/{id}} — retrieve an event by ID</li>
+ *   <li>{@code GET /events?account={accountId}} — list events for an account</li>
+ * </ul>
+ *
+ * <p>Each test runs against the full Spring context backed by an in-memory H2
+ * database. The {@code @Transactional} annotation rolls back all changes after
+ * each test, guaranteeing isolation without manual teardown.
+ *
+ * <p>A random account ID is generated per test to prevent data leaking between
+ * test cases.
+ *
+ * @author Sarathkumar Ravi
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
@@ -32,13 +49,28 @@ class EventControllerIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    /** Unique account ID generated fresh for each test to ensure isolation. */
     private String uniqueAccount;
 
+    /**
+     * Creates a fresh random account ID before each test so that data
+     * written by one test cannot affect another.
+     */
     @BeforeEach
     void setUp() {
         uniqueAccount = "acct-" + UUID.randomUUID();
     }
 
+    /**
+     * Builds a fully-populated {@link EventRequest} for use in tests.
+     *
+     * @param eventId   unique event identifier
+     * @param accountId account to associate the event with
+     * @param type      {@code CREDIT} or {@code DEBIT}
+     * @param amount    transaction amount
+     * @param timestamp ISO-8601 UTC timestamp string for the event
+     * @return a ready-to-submit {@link EventRequest}
+     */
     private EventRequest buildRequest(String eventId, String accountId, EventType type, double amount, String timestamp) {
         return EventRequest.builder()
                 .eventId(eventId)
@@ -51,6 +83,13 @@ class EventControllerIntegrationTest {
                 .build();
     }
 
+    /**
+     * Helper that POSTs the given request and ignores the response.
+     * Used to seed data for subsequent GET assertions.
+     *
+     * @param request the event payload to submit
+     * @throws Exception if the MockMvc request fails unexpectedly
+     */
     private void postEvent(EventRequest request) throws Exception {
         mockMvc.perform(post("/events")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -59,6 +98,10 @@ class EventControllerIntegrationTest {
 
     // ── POST /events ──────────────────────────────────────────────────────────
 
+    /**
+     * A valid new event must be persisted and return HTTP 201 Created with
+     * the full event body in the response.
+     */
     @Test
     void postEvent_validPayload_returns201Created() throws Exception {
         EventRequest request = buildRequest("evt-001", uniqueAccount, EventType.CREDIT, 150.00, "2026-05-15T10:00:00Z");
@@ -74,6 +117,10 @@ class EventControllerIntegrationTest {
                 .andExpect(jsonPath("$.currency").value("USD"));
     }
 
+    /**
+     * Re-submitting an event with the same {@code eventId} must return HTTP 200 OK
+     * with the original event data — no duplicate record should be created.
+     */
     @Test
     void postEvent_duplicateEventId_returns200OkWithOriginalData() throws Exception {
         EventRequest request = buildRequest("evt-dup", uniqueAccount, EventType.CREDIT, 100.00, "2026-05-15T10:00:00Z");
@@ -93,6 +140,9 @@ class EventControllerIntegrationTest {
                 .andExpect(jsonPath("$.amount").value(100.00));
     }
 
+    /**
+     * A request with a missing {@code eventId} must be rejected with HTTP 400 Bad Request.
+     */
     @Test
     void postEvent_missingEventId_returns400() throws Exception {
         String body = """
@@ -111,6 +161,9 @@ class EventControllerIntegrationTest {
                 .andExpect(jsonPath("$.status").value(400));
     }
 
+    /**
+     * A request with a missing {@code accountId} must be rejected with HTTP 400 Bad Request.
+     */
     @Test
     void postEvent_missingAccountId_returns400() throws Exception {
         String body = """
@@ -128,6 +181,10 @@ class EventControllerIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * A zero {@code amount} violates the {@code @Positive} constraint and must
+     * return HTTP 400 with an error message referencing the {@code amount} field.
+     */
     @Test
     void postEvent_zeroAmount_returns400() throws Exception {
         EventRequest request = buildRequest("evt-zero", uniqueAccount, EventType.CREDIT, 0.00, "2026-05-15T10:00:00Z");
@@ -139,6 +196,10 @@ class EventControllerIntegrationTest {
                 .andExpect(jsonPath("$.message").value(containsString("amount")));
     }
 
+    /**
+     * A negative {@code amount} violates the {@code @Positive} constraint and must
+     * return HTTP 400 with an error message referencing the {@code amount} field.
+     */
     @Test
     void postEvent_negativeAmount_returns400() throws Exception {
         EventRequest request = buildRequest("evt-neg", uniqueAccount, EventType.CREDIT, -50.00, "2026-05-15T10:00:00Z");
@@ -150,6 +211,10 @@ class EventControllerIntegrationTest {
                 .andExpect(jsonPath("$.message").value(containsString("amount")));
     }
 
+    /**
+     * An unrecognised {@code type} value (e.g. {@code "TRANSFER"}) cannot be
+     * deserialised into {@link EventType} and must return HTTP 400 Bad Request.
+     */
     @Test
     void postEvent_invalidType_returns400() throws Exception {
         String body = """
@@ -168,6 +233,10 @@ class EventControllerIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * A request with a missing {@code eventTimestamp} violates the {@code @NotNull}
+     * constraint and must return HTTP 400 Bad Request.
+     */
     @Test
     void postEvent_missingTimestamp_returns400() throws Exception {
         String body = """
@@ -185,6 +254,9 @@ class EventControllerIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * A syntactically invalid JSON body must return HTTP 400 Bad Request.
+     */
     @Test
     void postEvent_malformedJson_returns400() throws Exception {
         mockMvc.perform(post("/events")
@@ -195,6 +267,10 @@ class EventControllerIntegrationTest {
 
     // ── GET /events/{id} ──────────────────────────────────────────────────────
 
+    /**
+     * A GET request for an existing event ID must return HTTP 200 OK with
+     * the corresponding event body.
+     */
     @Test
     void getEvent_existingId_returns200WithBody() throws Exception {
         EventRequest request = buildRequest("evt-get-1", uniqueAccount, EventType.CREDIT, 200.00, "2026-05-15T10:00:00Z");
@@ -206,6 +282,10 @@ class EventControllerIntegrationTest {
                 .andExpect(jsonPath("$.amount").value(200.00));
     }
 
+    /**
+     * A GET request for an unknown event ID must return HTTP 404 Not Found
+     * with a status field in the error body.
+     */
     @Test
     void getEvent_nonExistentId_returns404() throws Exception {
         mockMvc.perform(get("/events/evt-does-not-exist"))
@@ -215,6 +295,10 @@ class EventControllerIntegrationTest {
 
     // ── GET /events?account={accountId} ──────────────────────────────────────
 
+    /**
+     * A GET request for a known account must return HTTP 200 OK with a list
+     * containing all events for that account.
+     */
     @Test
     void getEventsByAccount_existingAccount_returns200WithList() throws Exception {
         postEvent(buildRequest("evt-list-1", uniqueAccount, EventType.CREDIT, 100.00, "2026-05-15T10:00:00Z"));
@@ -225,6 +309,11 @@ class EventControllerIntegrationTest {
                 .andExpect(jsonPath("$", hasSize(2)));
     }
 
+    /**
+     * Events submitted out of chronological order must be returned sorted by
+     * {@code eventTimestamp} ascending (08:00 → 10:00 → 12:00), regardless of
+     * submission order.
+     */
     @Test
     void getEventsByAccount_outOfOrderSubmission_returnsChronologicalOrder() throws Exception {
         // Submit in reverse chronological order
@@ -241,6 +330,10 @@ class EventControllerIntegrationTest {
                 .andExpect(jsonPath("$[2].eventId").value("evt-ooo-c"));
     }
 
+    /**
+     * A GET request for an account with no recorded events must return
+     * HTTP 404 Not Found.
+     */
     @Test
     void getEventsByAccount_nonExistentAccount_returns404() throws Exception {
         mockMvc.perform(get("/events").param("account", "acct-unknown-" + UUID.randomUUID()))

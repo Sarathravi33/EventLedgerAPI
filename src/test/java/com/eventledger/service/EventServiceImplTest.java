@@ -25,6 +25,16 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+/**
+ * Unit tests for {@link EventServiceImpl}.
+ *
+ * <p>The repository is replaced with a Mockito mock so that each test
+ * exercises only the service logic in isolation, without a real database.
+ * The {@link ObjectMapper} is constructed directly with the same configuration
+ * used in production to keep serialisation behaviour realistic.
+ *
+ * @author Sarathkumar Ravi
+ */
 @ExtendWith(MockitoExtension.class)
 class EventServiceImplTest {
 
@@ -33,6 +43,10 @@ class EventServiceImplTest {
 
     private EventServiceImpl service;
 
+    /**
+     * Constructs the service under test with a real {@link ObjectMapper}
+     * (JavaTimeModule enabled, timestamps disabled) before each test.
+     */
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper()
@@ -41,6 +55,15 @@ class EventServiceImplTest {
         service = new EventServiceImpl(repository, objectMapper);
     }
 
+    /**
+     * Builds a minimal {@link EventRequest} with the given parameters.
+     *
+     * @param eventId   unique event identifier
+     * @param accountId account to associate the event with
+     * @param type      {@code CREDIT} or {@code DEBIT}
+     * @param amount    transaction amount
+     * @return a populated {@link EventRequest}
+     */
     private EventRequest buildRequest(String eventId, String accountId, EventType type, BigDecimal amount) {
         return EventRequest.builder()
                 .eventId(eventId)
@@ -52,6 +75,16 @@ class EventServiceImplTest {
                 .build();
     }
 
+    /**
+     * Builds a {@link TransactionEvent} entity with the given parameters,
+     * simulating a record as it would appear after being persisted.
+     *
+     * @param eventId   unique event identifier
+     * @param accountId account the event belongs to
+     * @param type      {@code CREDIT} or {@code DEBIT}
+     * @param amount    transaction amount
+     * @return a populated {@link TransactionEvent}
+     */
     private TransactionEvent buildEntity(String eventId, String accountId, EventType type, BigDecimal amount) {
         return TransactionEvent.builder()
                 .id(1L)
@@ -65,6 +98,10 @@ class EventServiceImplTest {
                 .build();
     }
 
+    /**
+     * A new event (no existing record for its {@code eventId}) must be saved
+     * and the result must have {@code created = true}.
+     */
     @Test
     void submitEvent_newEvent_returnsCreatedTrue() {
         EventRequest request = buildRequest("evt-001", "acct-123", EventType.CREDIT, new BigDecimal("100.00"));
@@ -80,6 +117,10 @@ class EventServiceImplTest {
         verify(repository, times(1)).save(any());
     }
 
+    /**
+     * Re-submitting a previously processed event must return the existing record
+     * with {@code created = false} and must not call {@code save} on the repository.
+     */
     @Test
     void submitEvent_duplicate_returnsCreatedFalse_noSaveCall() {
         EventRequest request = buildRequest("evt-001", "acct-123", EventType.CREDIT, new BigDecimal("100.00"));
@@ -94,6 +135,10 @@ class EventServiceImplTest {
         verify(repository, never()).save(any());
     }
 
+    /**
+     * Looking up an existing event by ID must return the corresponding
+     * {@link EventResponse} with matching field values.
+     */
     @Test
     void getEventById_existingId_returnsEventResponse() {
         TransactionEvent entity = buildEntity("evt-001", "acct-123", EventType.CREDIT, new BigDecimal("100.00"));
@@ -105,6 +150,10 @@ class EventServiceImplTest {
         assertThat(response.getAccountId()).isEqualTo("acct-123");
     }
 
+    /**
+     * Looking up an event ID that does not exist must throw
+     * {@link EventNotFoundException} with the unknown ID in the message.
+     */
     @Test
     void getEventById_notFound_throwsEventNotFoundException() {
         when(repository.findByEventId("evt-999")).thenReturn(Optional.empty());
@@ -114,6 +163,10 @@ class EventServiceImplTest {
                 .hasMessageContaining("evt-999");
     }
 
+    /**
+     * Requesting events for a known account must return a list containing
+     * all events for that account.
+     */
     @Test
     void getEventsByAccount_existingAccount_returnsList() {
         TransactionEvent e1 = buildEntity("evt-001", "acct-123", EventType.CREDIT, new BigDecimal("100.00"));
@@ -127,6 +180,10 @@ class EventServiceImplTest {
         assertThat(result).hasSize(2);
     }
 
+    /**
+     * Requesting events for an account with no recorded events must throw
+     * {@link AccountNotFoundException} with the unknown account ID in the message.
+     */
     @Test
     void getEventsByAccount_nonExistentAccount_throwsAccountNotFoundException() {
         when(repository.existsByAccountId("acct-999")).thenReturn(false);
@@ -136,6 +193,10 @@ class EventServiceImplTest {
                 .hasMessageContaining("acct-999");
     }
 
+    /**
+     * The balance for an account with both CREDIT and DEBIT events must match
+     * the value returned by the repository's balance query.
+     */
     @Test
     void getBalance_correctNetCalculation() {
         TransactionEvent entity = buildEntity("evt-001", "acct-123", EventType.CREDIT, new BigDecimal("100.00"));
@@ -150,6 +211,10 @@ class EventServiceImplTest {
         assertThat(balance.getAccountId()).isEqualTo("acct-123");
     }
 
+    /**
+     * Requesting the balance for an account with no recorded events must throw
+     * {@link AccountNotFoundException} with the unknown account ID in the message.
+     */
     @Test
     void getBalance_accountNotFound_throwsAccountNotFoundException() {
         when(repository.existsByAccountId("acct-999")).thenReturn(false);
