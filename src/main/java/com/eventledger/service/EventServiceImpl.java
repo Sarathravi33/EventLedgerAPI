@@ -12,11 +12,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -92,18 +94,19 @@ public class EventServiceImpl implements EventService {
      * {@inheritDoc}
      *
      * @param accountId the account whose events are to be retrieved
+     * @param page      zero-based page index
+     * @param size      number of events per page
      * @throws AccountNotFoundException if the account has no recorded events
      */
     @Override
     @Transactional(readOnly = true)
-    public List<EventResponse> getEventsByAccount(String accountId) {
+    public Page<EventResponse> getEventsByAccount(String accountId, int page, int size) {
         if (!repository.existsByAccountId(accountId)) {
             throw new AccountNotFoundException(accountId);
         }
-        return repository.findByAccountIdOrderByEventTimestampAsc(accountId)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("eventTimestamp").ascending());
+        return repository.findByAccountId(accountId, pageable)
+                .map(this::toResponse);
     }
 
     /**

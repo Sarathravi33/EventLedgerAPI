@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -164,20 +166,21 @@ class EventServiceImplTest {
     }
 
     /**
-     * Requesting events for a known account must return a list containing
+     * Requesting events for a known account must return a page containing
      * all events for that account.
      */
     @Test
-    void getEventsByAccount_existingAccount_returnsList() {
+    void getEventsByAccount_existingAccount_returnsPage() {
         TransactionEvent e1 = buildEntity("evt-001", "acct-123", EventType.CREDIT, new BigDecimal("100.00"));
         TransactionEvent e2 = buildEntity("evt-002", "acct-123", EventType.DEBIT, new BigDecimal("30.00"));
 
         when(repository.existsByAccountId("acct-123")).thenReturn(true);
-        when(repository.findByAccountIdOrderByEventTimestampAsc("acct-123")).thenReturn(List.of(e1, e2));
+        when(repository.findByAccountId(eq("acct-123"), any())).thenReturn(new PageImpl<>(List.of(e1, e2)));
 
-        List<EventResponse> result = service.getEventsByAccount("acct-123");
+        Page<EventResponse> result = service.getEventsByAccount("acct-123", 0, 20);
 
-        assertThat(result).hasSize(2);
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getTotalElements()).isEqualTo(2);
     }
 
     /**
@@ -188,7 +191,7 @@ class EventServiceImplTest {
     void getEventsByAccount_nonExistentAccount_throwsAccountNotFoundException() {
         when(repository.existsByAccountId("acct-999")).thenReturn(false);
 
-        assertThatThrownBy(() -> service.getEventsByAccount("acct-999"))
+        assertThatThrownBy(() -> service.getEventsByAccount("acct-999", 0, 20))
                 .isInstanceOf(AccountNotFoundException.class)
                 .hasMessageContaining("acct-999");
     }

@@ -3,8 +3,7 @@ package com.eventledger.service;
 import com.eventledger.dto.BalanceResponse;
 import com.eventledger.dto.EventRequest;
 import com.eventledger.dto.EventResponse;
-
-import java.util.List;
+import org.springframework.data.domain.Page;
 
 /**
  * Service interface defining the business operations for the Event Ledger.
@@ -46,15 +45,17 @@ public interface EventService {
     EventResponse getEventById(String eventId);
 
     /**
-     * Returns all transaction events for the specified account, ordered
+     * Returns a page of transaction events for the specified account, ordered
      * by event timestamp ascending.
      *
      * @param accountId the account whose events are to be retrieved
-     * @return a non-null list of {@link EventResponse} objects
+     * @param page      zero-based page index
+     * @param size      number of events per page (must be &gt; 0)
+     * @return a {@link Page} of {@link EventResponse} objects
      * @throws com.eventledger.exception.AccountNotFoundException if the account
      *         has no recorded events
      */
-    List<EventResponse> getEventsByAccount(String accountId);
+    Page<EventResponse> getEventsByAccount(String accountId, int page, int size);
 
     /**
      * Computes the current net balance for the specified account.

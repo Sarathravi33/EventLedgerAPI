@@ -103,14 +103,52 @@
           "response": []
         },
         {
-          "name": "GET - Events for account (ordered by eventTimestamp ASC)",
+          "name": "GET - Events for account, default pagination (page=0, size=20)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/events?account=acct-123",
+              "raw": "{{baseUrl}}/events?account=acct-123&page=0&size=20",
               "host": ["{{baseUrl}}"],
               "path": ["events"],
-              "query": [{ "key": "account", "value": "acct-123" }]
+              "query": [
+                { "key": "account", "value": "acct-123" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Events for account, first page (size=2)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/events?account=acct-123&page=0&size=2",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"],
+              "query": [
+                { "key": "account", "value": "acct-123" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "2" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Events for account, second page (size=2)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/events?account=acct-123&page=1&size=2",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"],
+              "query": [
+                { "key": "account", "value": "acct-123" },
+                { "key": "page", "value": "1" },
+                { "key": "size", "value": "2" }
+              ]
             }
           },
           "response": []
@@ -257,6 +295,38 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "GET - Negative page index (400)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/events?account=acct-123&page=-1",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"],
+              "query": [
+                { "key": "account", "value": "acct-123" },
+                { "key": "page", "value": "-1" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Zero page size (400)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/events?account=acct-123&size=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"],
+              "query": [
+                { "key": "account", "value": "acct-123" },
+                { "key": "size", "value": "0" }
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -298,14 +368,18 @@
           "response": []
         },
         {
-          "name": "GET - Events for acct-456 (ordered by timestamp)",
+          "name": "GET - Events for acct-456, default pagination",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/events?account=acct-456",
+              "raw": "{{baseUrl}}/events?account=acct-456&page=0&size=20",
               "host": ["{{baseUrl}}"],
               "path": ["events"],
-              "query": [{ "key": "account", "value": "acct-456" }]
+              "query": [
+                { "key": "account", "value": "acct-456" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
             }
           },
           "response": []

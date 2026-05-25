@@ -296,17 +296,19 @@ class EventControllerIntegrationTest {
     // ── GET /events?account={accountId} ──────────────────────────────────────
 
     /**
-     * A GET request for a known account must return HTTP 200 OK with a list
-     * containing all events for that account.
+     * A GET request for a known account must return HTTP 200 OK with a paged
+     * response whose {@code content} contains all events for that account.
      */
     @Test
-    void getEventsByAccount_existingAccount_returns200WithList() throws Exception {
+    void getEventsByAccount_existingAccount_returns200WithPagedContent() throws Exception {
         postEvent(buildRequest("evt-list-1", uniqueAccount, EventType.CREDIT, 100.00, "2026-05-15T10:00:00Z"));
         postEvent(buildRequest("evt-list-2", uniqueAccount, EventType.DEBIT, 30.00, "2026-05-15T11:00:00Z"));
 
         mockMvc.perform(get("/events").param("account", uniqueAccount))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)));
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(1));
     }
 
     /**
@@ -323,11 +325,11 @@ class EventControllerIntegrationTest {
 
         mockMvc.perform(get("/events").param("account", uniqueAccount))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$.content", hasSize(3)))
                 // Chronological order: 08:00 → 10:00 → 12:00
-                .andExpect(jsonPath("$[0].eventId").value("evt-ooo-a"))
-                .andExpect(jsonPath("$[1].eventId").value("evt-ooo-b"))
-                .andExpect(jsonPath("$[2].eventId").value("evt-ooo-c"));
+                .andExpect(jsonPath("$.content[0].eventId").value("evt-ooo-a"))
+                .andExpect(jsonPath("$.content[1].eventId").value("evt-ooo-b"))
+                .andExpect(jsonPath("$.content[2].eventId").value("evt-ooo-c"));
     }
 
     /**
@@ -338,5 +340,71 @@ class EventControllerIntegrationTest {
     void getEventsByAccount_nonExistentAccount_returns404() throws Exception {
         mockMvc.perform(get("/events").param("account", "acct-unknown-" + UUID.randomUUID()))
                 .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Requesting page 0 with size 2 from a 3-event account must return
+     * the first two events and indicate a second page exists.
+     */
+    @Test
+    void getEventsByAccount_firstPage_returnsCorrectSlice() throws Exception {
+        postEvent(buildRequest("evt-pg-1", uniqueAccount, EventType.CREDIT, 10.00, "2026-05-15T08:00:00Z"));
+        postEvent(buildRequest("evt-pg-2", uniqueAccount, EventType.CREDIT, 20.00, "2026-05-15T09:00:00Z"));
+        postEvent(buildRequest("evt-pg-3", uniqueAccount, EventType.CREDIT, 30.00, "2026-05-15T10:00:00Z"));
+
+        mockMvc.perform(get("/events")
+                        .param("account", uniqueAccount)
+                        .param("page", "0")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].eventId").value("evt-pg-1"))
+                .andExpect(jsonPath("$.content[1].eventId").value("evt-pg-2"))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(false));
+    }
+
+    /**
+     * Requesting page 1 with size 2 from a 3-event account must return
+     * only the third event and flag it as the last page.
+     */
+    @Test
+    void getEventsByAccount_secondPage_returnsRemainingEvents() throws Exception {
+        postEvent(buildRequest("evt-pg2-1", uniqueAccount, EventType.CREDIT, 10.00, "2026-05-15T08:00:00Z"));
+        postEvent(buildRequest("evt-pg2-2", uniqueAccount, EventType.CREDIT, 20.00, "2026-05-15T09:00:00Z"));
+        postEvent(buildRequest("evt-pg2-3", uniqueAccount, EventType.CREDIT, 30.00, "2026-05-15T10:00:00Z"));
+
+        mockMvc.perform(get("/events")
+                        .param("account", uniqueAccount)
+                        .param("page", "1")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].eventId").value("evt-pg2-3"))
+                .andExpect(jsonPath("$.last").value(true));
+    }
+
+    /**
+     * A negative page index must be rejected with HTTP 400 Bad Request.
+     */
+    @Test
+    void getEventsByAccount_negativePage_returns400() throws Exception {
+        mockMvc.perform(get("/events")
+                        .param("account", uniqueAccount)
+                        .param("page", "-1"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * A page size of zero must be rejected with HTTP 400 Bad Request.
+     */
+    @Test
+    void getEventsByAccount_zeroSize_returns400() throws Exception {
+        mockMvc.perform(get("/events")
+                        .param("account", uniqueAccount)
+                        .param("size", "0"))
+                .andExpect(status().isBadRequest());
     }
 }

@@ -1,6 +1,8 @@
 package com.eventledger.repository;
 
 import com.eventledger.entity.TransactionEvent;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -41,6 +43,16 @@ public interface TransactionEventRepository extends JpaRepository<TransactionEve
      * @return an ordered list of matching events; empty if none exist
      */
     List<TransactionEvent> findByAccountIdOrderByEventTimestampAsc(String accountId);
+
+    /**
+     * Returns a page of transaction events for the specified account, sorted by
+     * event timestamp ascending.
+     *
+     * @param accountId the account whose events are to be retrieved
+     * @param pageable  pagination and sorting parameters
+     * @return a page of matching events
+     */
+    Page<TransactionEvent> findByAccountId(String accountId, Pageable pageable);
 
     /**
      * Checks whether any transaction events have been recorded for the

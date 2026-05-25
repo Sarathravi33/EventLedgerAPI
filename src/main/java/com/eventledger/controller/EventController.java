@@ -5,12 +5,13 @@ import com.eventledger.dto.EventResponse;
 import com.eventledger.service.EventService;
 import com.eventledger.service.EventService.SubmitResult;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST controller that handles CRUD operations for transaction events.
@@ -23,6 +24,7 @@ import java.util.List;
  *
  * @author Sarathkumar Ravi
  */
+@Validated
 @RestController
 @RequestMapping("/events")
 @RequiredArgsConstructor
@@ -62,16 +64,20 @@ public class EventController {
     }
 
     /**
-     * Lists all transaction events belonging to the specified account,
-     * ordered by event timestamp ascending.
+     * Lists transaction events for the specified account, ordered by event
+     * timestamp ascending, with cursor-based pagination.
      *
      * @param accountId the account whose events are to be retrieved
-     * @return {@code 200 OK} with the list of events, or
+     * @param page      zero-based page index (default 0)
+     * @param size      number of events per page, 1–200 (default 20)
+     * @return {@code 200 OK} with a page of events, or
      *         {@code 404 Not Found} if the account has no recorded events
      */
     @GetMapping
-    public ResponseEntity<List<EventResponse>> getEventsByAccount(
-            @RequestParam("account") String accountId) {
-        return ResponseEntity.ok(eventService.getEventsByAccount(accountId));
+    public ResponseEntity<Page<EventResponse>> getEventsByAccount(
+            @RequestParam("account") String accountId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) int size) {
+        return ResponseEntity.ok(eventService.getEventsByAccount(accountId, page, size));
     }
 }
