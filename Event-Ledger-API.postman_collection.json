@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Event Ledger API",
-    "description": "Collection for testing the Event Ledger API — idempotency, out-of-order events, balance computation, and validation.",
+    "description": "Collection for testing the Event Ledger API — idempotency (sequential and concurrent), out-of-order events, pagination, balance computation, and validation. Duplicate eventId submissions always return 200 OK regardless of whether the duplicate arrives sequentially or from a concurrent race.",
     "_postman_id": "event-ledger-api-collection",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -18,6 +18,26 @@
       "item": [
         {
           "name": "POST - Submit CREDIT event (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Response contains eventId', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.eventId).to.eql('evt-001');",
+                  "    pm.expect(json.type).to.eql('CREDIT');",
+                  "    pm.expect(json.amount).to.eql(150);",
+                  "    pm.collectionVariables.set('lastEventId', json.eventId);",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -56,7 +76,30 @@
           "response": []
         },
         {
-          "name": "POST - Duplicate event (200 - idempotent)",
+          "name": "POST - Duplicate event (200 - idempotent, concurrent-safe)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK — not 500 — for duplicate eventId', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response body matches the original event', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.eventId).to.eql('evt-001');",
+                  "    pm.expect(json.type).to.eql('CREDIT');",
+                  "    pm.expect(json.amount).to.eql(150);",
+                  "});",
+                  "pm.test('No duplicate record created (eventId is unchanged)', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.eventId).to.eql(pm.collectionVariables.get('lastEventId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],

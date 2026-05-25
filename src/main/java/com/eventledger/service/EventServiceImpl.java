@@ -12,6 +12,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -50,10 +51,14 @@ public class EventServiceImpl implements EventService {
      * <p>If the {@code eventId} is already present in the store, the existing
      * record is returned immediately without touching the database write path.
      *
+     * <p>No outer transaction wraps this method deliberately. Each repository
+     * call runs in its own transaction so that a {@link DataIntegrityViolationException}
+     * from a concurrent duplicate insert only rolls back that single save — leaving
+     * the connection clean for the follow-up re-read that returns the winner's record.
+     *
      * @param request the event payload containing the idempotency key and transaction details
      */
     @Override
-    @Transactional
     public SubmitResult submitEvent(EventRequest request) {
         Optional<TransactionEvent> existing = repository.findByEventId(request.getEventId());
         if (existing.isPresent()) {
@@ -71,9 +76,23 @@ public class EventServiceImpl implements EventService {
                 .metadata(toJson(request.getMetadata()))
                 .build();
 
-        TransactionEvent saved = repository.save(entity);
-        log.debug("Saved new event: {}", saved.getEventId());
-        return new SubmitResult(toResponse(saved), true);
+        try {
+            // saveAndFlush flushes within its own transaction so the unique constraint
+            // fires immediately — making the DataIntegrityViolationException catchable here.
+            TransactionEvent saved = repository.saveAndFlush(entity);
+            log.debug("Saved new event: {}", saved.getEventId());
+            return new SubmitResult(toResponse(saved), true);
+        } catch (DataIntegrityViolationException e) {
+            // A concurrent request inserted the same eventId between our read and write.
+            // The DB constraint is the authoritative guard — treat this as a duplicate.
+            log.debug("Concurrent duplicate detected for eventId={}, returning existing record",
+                    request.getEventId());
+            return repository.findByEventId(request.getEventId())
+                    .map(ev -> new SubmitResult(toResponse(ev), false))
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Unique constraint violated but no record found for eventId: "
+                                    + request.getEventId(), e));
+        }
     }
 
     /**

@@ -10,13 +10,21 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -406,5 +414,60 @@ class EventControllerIntegrationTest {
                         .param("account", uniqueAccount)
                         .param("size", "0"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ── Concurrency ───────────────────────────────────────────────────────────
+
+    /**
+     * Five threads submit the same {@code eventId} simultaneously. The DB unique
+     * constraint guarantees exactly one insert succeeds; the service must catch
+     * the resulting {@link org.springframework.dao.DataIntegrityViolationException}
+     * and return {@code 200 OK} for every thread that lost the race — never a
+     * {@code 500 Internal Server Error}.
+     *
+     * <p>{@code Propagation.NOT_SUPPORTED} opts this test out of the class-level
+     * transaction so that each spawned thread's MockMvc request runs in its own
+     * independent transaction, accurately mirroring real concurrent HTTP requests.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void submitEvent_concurrentIdenticalRequests_onlyOneCreated() throws Exception {
+        String concurrentEventId = "evt-race-" + UUID.randomUUID();
+        String body = objectMapper.writeValueAsString(
+                buildRequest(concurrentEventId, uniqueAccount, EventType.CREDIT, 100.00, "2026-05-15T10:00:00Z"));
+
+        int threadCount = 5;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startGate = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        List<Integer> statuses = new CopyOnWriteArrayList<>();
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startGate.await();
+                    int status = mockMvc.perform(post("/events")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(body))
+                            .andReturn()
+                            .getResponse()
+                            .getStatus();
+                    statuses.add(status);
+                } catch (Exception e) {
+                    statuses.add(-1);
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startGate.countDown();
+        assertThat(doneLatch.await(10, TimeUnit.SECONDS)).isTrue();
+        executor.shutdown();
+
+        assertThat(statuses).hasSize(threadCount);
+        assertThat(statuses).doesNotContain(-1);
+        assertThat(statuses.stream().filter(s -> s == 201).count()).isEqualTo(1);
+        assertThat(statuses.stream().filter(s -> s == 200).count()).isEqualTo(threadCount - 1);
     }
 }

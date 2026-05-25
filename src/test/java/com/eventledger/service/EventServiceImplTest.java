@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 
@@ -110,18 +111,18 @@ class EventServiceImplTest {
         TransactionEvent saved = buildEntity("evt-001", "acct-123", EventType.CREDIT, new BigDecimal("100.00"));
 
         when(repository.findByEventId("evt-001")).thenReturn(Optional.empty());
-        when(repository.save(any())).thenReturn(saved);
+        when(repository.saveAndFlush(any())).thenReturn(saved);
 
         EventService.SubmitResult result = service.submitEvent(request);
 
         assertThat(result.created()).isTrue();
         assertThat(result.response().getEventId()).isEqualTo("evt-001");
-        verify(repository, times(1)).save(any());
+        verify(repository, times(1)).saveAndFlush(any());
     }
 
     /**
      * Re-submitting a previously processed event must return the existing record
-     * with {@code created = false} and must not call {@code save} on the repository.
+     * with {@code created = false} and must not call {@code saveAndFlush} on the repository.
      */
     @Test
     void submitEvent_duplicate_returnsCreatedFalse_noSaveCall() {
@@ -134,7 +135,33 @@ class EventServiceImplTest {
 
         assertThat(result.created()).isFalse();
         assertThat(result.response().getEventId()).isEqualTo("evt-001");
-        verify(repository, never()).save(any());
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    /**
+     * When two concurrent requests carry the same {@code eventId}, the unique
+     * constraint on the database column rejects the second insert with a
+     * {@link DataIntegrityViolationException}. The service must catch this,
+     * re-read the winner's record, and return it with {@code created = false}.
+     */
+    @Test
+    void submitEvent_concurrentDuplicate_returnsExistingRecordWithCreatedFalse() {
+        EventRequest request = buildRequest("evt-race", "acct-123", EventType.CREDIT, new BigDecimal("100.00"));
+        TransactionEvent winner = buildEntity("evt-race", "acct-123", EventType.CREDIT, new BigDecimal("100.00"));
+
+        // First read sees nothing (both concurrent threads pass this check)
+        when(repository.findByEventId("evt-race"))
+                .thenReturn(Optional.empty())          // initial check — record not yet visible
+                .thenReturn(Optional.of(winner));      // re-read after constraint violation
+
+        // Simulate the DB rejecting our insert because the other thread won
+        when(repository.saveAndFlush(any())).thenThrow(DataIntegrityViolationException.class);
+
+        EventService.SubmitResult result = service.submitEvent(request);
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.response().getEventId()).isEqualTo("evt-race");
+        verify(repository, times(2)).findByEventId("evt-race");
     }
 
     /**
