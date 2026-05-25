@@ -1,16 +1,48 @@
 {
   "info": {
     "name": "Event Ledger API",
-    "description": "Collection for testing the Event Ledger API — idempotency (sequential and concurrent), out-of-order events, pagination, balance computation, and validation. Duplicate eventId submissions always return 200 OK regardless of whether the duplicate arrives sequentially or from a concurrent race.",
+    "description": "Collection for testing the Event Ledger API — idempotency (sequential and concurrent), out-of-order events, pagination, balance computation, and validation.\n\nDuplicate eventId submissions always return 200 OK regardless of whether the duplicate arrives sequentially or from a concurrent race.\n\n**Re-running against a persistent database (Docker/PostgreSQL):**\nA collection-level pre-request script generates a unique run prefix on first request and stores all event/account IDs as collection variables. Each collection run automatically uses fresh IDs, so the collection is safe to run repeatedly without wiping the database.\nTo start a brand-new run, clear the `runId` collection variable (Edit Collection → Variables → clear the current value of `runId`).",
     "_postman_id": "event-ledger-api-collection",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "variable": [
+  "event": [
     {
-      "key": "baseUrl",
-      "value": "http://localhost:8081",
-      "type": "string"
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Generate unique IDs once per collection run so that re-running against a",
+          "// persistent PostgreSQL database (Docker) never collides with existing rows.",
+          "// IDs are stored as collection variables and referenced in every request.",
+          "// To start a fresh run: clear the 'runId' collection variable.",
+          "if (!pm.collectionVariables.get('runId')) {",
+          "    var ts = Date.now().toString(36);",
+          "    pm.collectionVariables.set('runId',      ts);",
+          "    pm.collectionVariables.set('acctMain',   'acct-'  + ts);",
+          "    pm.collectionVariables.set('acctSecond', 'acct2-' + ts);",
+          "    pm.collectionVariables.set('evt000', 'evt-' + ts + '-000');",
+          "    pm.collectionVariables.set('evt001', 'evt-' + ts + '-001');",
+          "    pm.collectionVariables.set('evt002', 'evt-' + ts + '-002');",
+          "    pm.collectionVariables.set('evt003', 'evt-' + ts + '-003');",
+          "    pm.collectionVariables.set('evt101', 'evt-' + ts + '-101');",
+          "    pm.collectionVariables.set('evt102', 'evt-' + ts + '-102');",
+          "}"
+        ]
+      }
     }
+  ],
+  "variable": [
+    { "key": "baseUrl",     "value": "http://localhost:8081", "type": "string" },
+    { "key": "runId",       "value": "", "type": "string" },
+    { "key": "acctMain",    "value": "", "type": "string" },
+    { "key": "acctSecond",  "value": "", "type": "string" },
+    { "key": "evt000",      "value": "", "type": "string" },
+    { "key": "evt001",      "value": "", "type": "string" },
+    { "key": "evt002",      "value": "", "type": "string" },
+    { "key": "evt003",      "value": "", "type": "string" },
+    { "key": "evt101",      "value": "", "type": "string" },
+    { "key": "evt102",      "value": "", "type": "string" },
+    { "key": "lastEventId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -27,9 +59,9 @@
                   "pm.test('Status is 201 Created', function () {",
                   "    pm.response.to.have.status(201);",
                   "});",
-                  "pm.test('Response contains eventId', function () {",
+                  "pm.test('Response contains correct eventId and fields', function () {",
                   "    var json = pm.response.json();",
-                  "    pm.expect(json.eventId).to.eql('evt-001');",
+                  "    pm.expect(json.eventId).to.eql(pm.collectionVariables.get('evt001'));",
                   "    pm.expect(json.type).to.eql('CREDIT');",
                   "    pm.expect(json.amount).to.eql(150);",
                   "    pm.collectionVariables.set('lastEventId', json.eventId);",
@@ -44,7 +76,7 @@
             "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"eventId\": \"evt-001\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 150.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T14:02:11Z\",\n  \"metadata\": {\n    \"source\": \"mainframe-batch\",\n    \"batchId\": \"B-9042\"\n  }\n}"
+              "raw": "{\n  \"eventId\": \"{{evt001}}\",\n  \"accountId\": \"{{acctMain}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": 150.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T14:02:11Z\",\n  \"metadata\": {\n    \"source\": \"mainframe-batch\",\n    \"batchId\": \"B-9042\"\n  }\n}"
             }
           },
           "response": []
@@ -57,7 +89,7 @@
             "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"eventId\": \"evt-002\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"DEBIT\",\n  \"amount\": 40.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T16:00:00Z\",\n  \"metadata\": {\n    \"source\": \"pos-terminal\",\n    \"terminalId\": \"T-001\"\n  }\n}"
+              "raw": "{\n  \"eventId\": \"{{evt002}}\",\n  \"accountId\": \"{{acctMain}}\",\n  \"type\": \"DEBIT\",\n  \"amount\": 40.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T16:00:00Z\",\n  \"metadata\": {\n    \"source\": \"pos-terminal\",\n    \"terminalId\": \"T-001\"\n  }\n}"
             }
           },
           "response": []
@@ -70,7 +102,7 @@
             "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"eventId\": \"evt-003\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 200.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T18:30:00Z\"\n}"
+              "raw": "{\n  \"eventId\": \"{{evt003}}\",\n  \"accountId\": \"{{acctMain}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": 200.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T18:30:00Z\"\n}"
             }
           },
           "response": []
@@ -88,11 +120,11 @@
                   "});",
                   "pm.test('Response body matches the original event', function () {",
                   "    var json = pm.response.json();",
-                  "    pm.expect(json.eventId).to.eql('evt-001');",
+                  "    pm.expect(json.eventId).to.eql(pm.collectionVariables.get('evt001'));",
                   "    pm.expect(json.type).to.eql('CREDIT');",
                   "    pm.expect(json.amount).to.eql(150);",
                   "});",
-                  "pm.test('No duplicate record created (eventId is unchanged)', function () {",
+                  "pm.test('No duplicate record created (eventId matches first submission)', function () {",
                   "    var json = pm.response.json();",
                   "    pm.expect(json.eventId).to.eql(pm.collectionVariables.get('lastEventId'));",
                   "});"
@@ -106,7 +138,7 @@
             "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"eventId\": \"evt-001\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 150.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T14:02:11Z\",\n  \"metadata\": {\n    \"source\": \"mainframe-batch\",\n    \"batchId\": \"B-9042\"\n  }\n}"
+              "raw": "{\n  \"eventId\": \"{{evt001}}\",\n  \"accountId\": \"{{acctMain}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": 150.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T14:02:11Z\",\n  \"metadata\": {\n    \"source\": \"mainframe-batch\",\n    \"batchId\": \"B-9042\"\n  }\n}"
             }
           },
           "response": []
@@ -119,7 +151,7 @@
             "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"eventId\": \"evt-000\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 500.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T08:00:00Z\",\n  \"metadata\": {\n    \"source\": \"opening-balance\",\n    \"note\": \"This has an earlier timestamp but was submitted last\"\n  }\n}"
+              "raw": "{\n  \"eventId\": \"{{evt000}}\",\n  \"accountId\": \"{{acctMain}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": 500.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T08:00:00Z\",\n  \"metadata\": {\n    \"source\": \"opening-balance\",\n    \"note\": \"This has an earlier timestamp but was submitted last\"\n  }\n}"
             }
           },
           "response": []
@@ -133,7 +165,11 @@
           "name": "GET - Single event by ID (200)",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/events/evt-001", "host": ["{{baseUrl}}"], "path": ["events", "evt-001"] }
+            "url": {
+              "raw": "{{baseUrl}}/events/{{evt001}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{evt001}}"]
+            }
           },
           "response": []
         },
@@ -141,7 +177,11 @@
           "name": "GET - Event not found (404)",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/events/evt-does-not-exist", "host": ["{{baseUrl}}"], "path": ["events", "evt-does-not-exist"] }
+            "url": {
+              "raw": "{{baseUrl}}/events/evt-does-not-exist",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "evt-does-not-exist"]
+            }
           },
           "response": []
         },
@@ -150,13 +190,13 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/events?account=acct-123&page=0&size=20",
+              "raw": "{{baseUrl}}/events?account={{acctMain}}&page=0&size=20",
               "host": ["{{baseUrl}}"],
               "path": ["events"],
               "query": [
-                { "key": "account", "value": "acct-123" },
-                { "key": "page", "value": "0" },
-                { "key": "size", "value": "20" }
+                { "key": "account", "value": "{{acctMain}}" },
+                { "key": "page",    "value": "0" },
+                { "key": "size",    "value": "20" }
               ]
             }
           },
@@ -167,13 +207,13 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/events?account=acct-123&page=0&size=2",
+              "raw": "{{baseUrl}}/events?account={{acctMain}}&page=0&size=2",
               "host": ["{{baseUrl}}"],
               "path": ["events"],
               "query": [
-                { "key": "account", "value": "acct-123" },
-                { "key": "page", "value": "0" },
-                { "key": "size", "value": "2" }
+                { "key": "account", "value": "{{acctMain}}" },
+                { "key": "page",    "value": "0" },
+                { "key": "size",    "value": "2" }
               ]
             }
           },
@@ -184,13 +224,13 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/events?account=acct-123&page=1&size=2",
+              "raw": "{{baseUrl}}/events?account={{acctMain}}&page=1&size=2",
               "host": ["{{baseUrl}}"],
               "path": ["events"],
               "query": [
-                { "key": "account", "value": "acct-123" },
-                { "key": "page", "value": "1" },
-                { "key": "size", "value": "2" }
+                { "key": "account", "value": "{{acctMain}}" },
+                { "key": "page",    "value": "1" },
+                { "key": "size",    "value": "2" }
               ]
             }
           },
@@ -215,10 +255,14 @@
       "name": "3. Account Balance",
       "item": [
         {
-          "name": "GET - Balance for acct-123 (200)",
+          "name": "GET - Balance for acctMain (200)",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/accounts/acct-123/balance", "host": ["{{baseUrl}}"], "path": ["accounts", "acct-123", "balance"] }
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{acctMain}}/balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["accounts", "{{acctMain}}", "balance"]
+            }
           },
           "response": []
         },
@@ -226,7 +270,11 @@
           "name": "GET - Balance for unknown account (404)",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/accounts/acct-unknown/balance", "host": ["{{baseUrl}}"], "path": ["accounts", "acct-unknown", "balance"] }
+            "url": {
+              "raw": "{{baseUrl}}/accounts/acct-unknown/balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["accounts", "acct-unknown", "balance"]
+            }
           },
           "response": []
         }
@@ -349,7 +397,7 @@
               "path": ["events"],
               "query": [
                 { "key": "account", "value": "acct-123" },
-                { "key": "page", "value": "-1" }
+                { "key": "page",    "value": "-1" }
               ]
             }
           },
@@ -365,7 +413,7 @@
               "path": ["events"],
               "query": [
                 { "key": "account", "value": "acct-123" },
-                { "key": "size", "value": "0" }
+                { "key": "size",    "value": "0" }
               ]
             }
           },
@@ -377,51 +425,55 @@
       "name": "5. Second Account (separate balance)",
       "item": [
         {
-          "name": "POST - Submit CREDIT to acct-456",
+          "name": "POST - Submit CREDIT to acctSecond",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"eventId\": \"evt-101\",\n  \"accountId\": \"acct-456\",\n  \"type\": \"CREDIT\",\n  \"amount\": 1000.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T09:00:00Z\"\n}"
+              "raw": "{\n  \"eventId\": \"{{evt101}}\",\n  \"accountId\": \"{{acctSecond}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": 1000.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T09:00:00Z\"\n}"
             }
           },
           "response": []
         },
         {
-          "name": "POST - Submit DEBIT to acct-456",
+          "name": "POST - Submit DEBIT to acctSecond",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"eventId\": \"evt-102\",\n  \"accountId\": \"acct-456\",\n  \"type\": \"DEBIT\",\n  \"amount\": 300.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T11:00:00Z\"\n}"
+              "raw": "{\n  \"eventId\": \"{{evt102}}\",\n  \"accountId\": \"{{acctSecond}}\",\n  \"type\": \"DEBIT\",\n  \"amount\": 300.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T11:00:00Z\"\n}"
             }
           },
           "response": []
         },
         {
-          "name": "GET - Balance for acct-456 (should be 700.00)",
-          "request": {
-            "method": "GET",
-            "url": { "raw": "{{baseUrl}}/accounts/acct-456/balance", "host": ["{{baseUrl}}"], "path": ["accounts", "acct-456", "balance"] }
-          },
-          "response": []
-        },
-        {
-          "name": "GET - Events for acct-456, default pagination",
+          "name": "GET - Balance for acctSecond (should be 700.00)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/events?account=acct-456&page=0&size=20",
+              "raw": "{{baseUrl}}/accounts/{{acctSecond}}/balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["accounts", "{{acctSecond}}", "balance"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Events for acctSecond, default pagination",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/events?account={{acctSecond}}&page=0&size=20",
               "host": ["{{baseUrl}}"],
               "path": ["events"],
               "query": [
-                { "key": "account", "value": "acct-456" },
-                { "key": "page", "value": "0" },
-                { "key": "size", "value": "20" }
+                { "key": "account", "value": "{{acctSecond}}" },
+                { "key": "page",    "value": "0" },
+                { "key": "size",    "value": "20" }
               ]
             }
           },
