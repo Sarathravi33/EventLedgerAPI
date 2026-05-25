@@ -1,0 +1,316 @@
+{
+  "info": {
+    "name": "Event Ledger API",
+    "description": "Collection for testing the Event Ledger API — idempotency, out-of-order events, balance computation, and validation.",
+    "_postman_id": "event-ledger-api-collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Submit Events",
+      "item": [
+        {
+          "name": "POST - Submit CREDIT event (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-001\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 150.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T14:02:11Z\",\n  \"metadata\": {\n    \"source\": \"mainframe-batch\",\n    \"batchId\": \"B-9042\"\n  }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Submit DEBIT event (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-002\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"DEBIT\",\n  \"amount\": 40.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T16:00:00Z\",\n  \"metadata\": {\n    \"source\": \"pos-terminal\",\n    \"terminalId\": \"T-001\"\n  }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Submit another CREDIT (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-003\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 200.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T18:30:00Z\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Duplicate event (200 - idempotent)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-001\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 150.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T14:02:11Z\",\n  \"metadata\": {\n    \"source\": \"mainframe-batch\",\n    \"batchId\": \"B-9042\"\n  }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Out-of-order event (earlier timestamp, submitted last)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-000\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 500.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T08:00:00Z\",\n  \"metadata\": {\n    \"source\": \"opening-balance\",\n    \"note\": \"This has an earlier timestamp but was submitted last\"\n  }\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Retrieve Events",
+      "item": [
+        {
+          "name": "GET - Single event by ID (200)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/events/evt-001", "host": ["{{baseUrl}}"], "path": ["events", "evt-001"] }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Event not found (404)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/events/evt-does-not-exist", "host": ["{{baseUrl}}"], "path": ["events", "evt-does-not-exist"] }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Events for account (ordered by eventTimestamp ASC)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/events?account=acct-123",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"],
+              "query": [{ "key": "account", "value": "acct-123" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Events for unknown account (404)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/events?account=acct-unknown",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"],
+              "query": [{ "key": "account", "value": "acct-unknown" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Account Balance",
+      "item": [
+        {
+          "name": "GET - Balance for acct-123 (200)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/accounts/acct-123/balance", "host": ["{{baseUrl}}"], "path": ["accounts", "acct-123", "balance"] }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Balance for unknown account (404)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/accounts/acct-unknown/balance", "host": ["{{baseUrl}}"], "path": ["accounts", "acct-unknown", "balance"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Validation Errors",
+      "item": [
+        {
+          "name": "POST - Missing eventId (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 100.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T10:00:00Z\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Missing accountId (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-bad-1\",\n  \"type\": \"CREDIT\",\n  \"amount\": 100.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T10:00:00Z\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Zero amount (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-zero\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 0,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T10:00:00Z\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Negative amount (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-neg\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": -50.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T10:00:00Z\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Invalid type TRANSFER (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-bad-type\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"TRANSFER\",\n  \"amount\": 100.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T10:00:00Z\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Missing eventTimestamp (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-no-ts\",\n  \"accountId\": \"acct-123\",\n  \"type\": \"CREDIT\",\n  \"amount\": 100.00,\n  \"currency\": \"USD\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Malformed JSON (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ this is not valid json }"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Missing all fields (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Second Account (separate balance)",
+      "item": [
+        {
+          "name": "POST - Submit CREDIT to acct-456",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-101\",\n  \"accountId\": \"acct-456\",\n  \"type\": \"CREDIT\",\n  \"amount\": 1000.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T09:00:00Z\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Submit DEBIT to acct-456",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"evt-102\",\n  \"accountId\": \"acct-456\",\n  \"type\": \"DEBIT\",\n  \"amount\": 300.00,\n  \"currency\": \"USD\",\n  \"eventTimestamp\": \"2026-05-15T11:00:00Z\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Balance for acct-456 (should be 700.00)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/accounts/acct-456/balance", "host": ["{{baseUrl}}"], "path": ["accounts", "acct-456", "balance"] }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Events for acct-456 (ordered by timestamp)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/events?account=acct-456",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"],
+              "query": [{ "key": "account", "value": "acct-456" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

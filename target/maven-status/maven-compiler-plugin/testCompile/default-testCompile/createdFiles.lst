@@ -1,0 +1,4 @@
+com\eventledger\controller\EventControllerIntegrationTest.class
+com\eventledger\EventLedgerApplicationTests.class
+com\eventledger\controller\AccountControllerIntegrationTest.class
+com\eventledger\service\EventServiceImplTest.class
